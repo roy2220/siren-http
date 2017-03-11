@@ -15,7 +15,9 @@ namespace http {
 class Header;
 class URI;
 enum class MethodType;
+enum class StatusCode;
 struct Request;
+struct Response;
 
 
 struct ParserOptions
@@ -37,12 +39,13 @@ public:
     inline explicit Parser(const Options &, T &&...);
 
     template <class T>
-    inline void getContent(std::size_t, T &&);
+    inline void getPayload(std::size_t, T &&);
 
     Parser(Parser &&) noexcept;
     Parser &operator=(Parser &&) noexcept;
 
     void getRequest(Request *);
+    void getResponse(Response *);
 
 private:
     ParserOptions options_;
@@ -59,6 +62,7 @@ private:
     static MethodType ParseMethod(const char *);
     static void ParseURI(const char *, URI *);
     static std::tuple<unsigned short, unsigned short> ParseVersion(const char *);
+    static StatusCode ParseStatusCode(const char *);
     static void ParseHeaderFields(const char *, Header *);
     static void ParseHeaderField(const char *, const char *, Header *);
 
@@ -71,12 +75,13 @@ private:
     void initialize() noexcept;
     void move(Parser *) noexcept;
     void parseRequestStartLine(Request *);
+    void parseResponseStartLine(Response *);
     void parseHeader(Header *);
     std::tuple<bool, std::size_t> parseBodyOrChunkSize(Header *);
     std::size_t parseFirstChunkSize();
     std::size_t parseChunkSize();
-    char *peekContent(std::size_t *);
-    void discardContent(std::size_t);
+    char *peekPayload(std::size_t *);
+    void discardPayload(std::size_t);
     std::tuple<char *, std::size_t> peekCharsUntilCRLF(std::size_t);
     std::tuple<char *, std::size_t> peekCharsUntilCRLFCRLF(std::size_t);
 };
@@ -128,12 +133,12 @@ Parser::isValid() const noexcept
 
 template <class T>
 void
-Parser::getContent(std::size_t contentSize, T &&callback)
+Parser::getPayload(std::size_t playloadSize, T &&callback)
 {
     SIREN_ASSERT(isValid());
-    char *content = peekContent(&contentSize);
-    callback(content, contentSize);
-    discardContent(contentSize);
+    char *playload = peekPayload(&playloadSize);
+    callback(playload, playloadSize);
+    discardPayload(playloadSize);
 }
 
 } // namespace http

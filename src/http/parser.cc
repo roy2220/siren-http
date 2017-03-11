@@ -6,6 +6,7 @@
 #include <siren/utility.h>
 
 #include "http/request.h"
+#include "http/response.h"
 
 
 namespace siren {
@@ -319,6 +320,19 @@ Parser::ParseVersion(const char *s)
 }
 
 
+StatusCode
+Parser::ParseStatusCode(const char *s)
+{
+    int rawStatusCode = ParseNumber<int>(s);
+
+    if (!TestRawStatusCode(rawStatusCode)) {
+        throw InvalidMessage();
+    }
+
+    return static_cast<StatusCode>(rawStatusCode);
+}
+
+
 void
 Parser::ParseHeaderFields(const char *s, Header *header)
 {
@@ -500,6 +514,18 @@ Parser::getRequest(Request *request)
 
 
 void
+Parser::getResponse(Response *response)
+{
+    SIREN_ASSERT(isValid());
+    SIREN_ASSERT(!bodyIsChunked_ && bodySize_ == 0);
+    SIREN_ASSERT(response != nullptr);
+    parseResponseStartLine(response);
+    parseHeader(&response->header);
+    std::tie(bodyIsChunked_, bodyOrChunkSize_) = parseBodyOrChunkSize(&response->header);
+}
+
+
+void
 Parser::parseRequestStartLine(Request *request)
 {
     char *s;
@@ -507,6 +533,11 @@ Parser::parseRequestStartLine(Request *request)
     std::tie(s, n) = peekCharsUntilCRLF(options_.maxStartLineSize);
     s[n - 2] = '\0';
     char *methodNameStart = s;
+
+    if (*methodNameStart == '\0') {
+        throw InvalidMessage();
+    }
+
     char *methodNameEnd;
 
     for (methodNameEnd = methodNameStart; *methodNameEnd != '\0'; ++methodNameEnd) {
@@ -560,6 +591,77 @@ Parser::parseRequestStartLine(Request *request)
     request->methodType = ParseMethod(methodNameStart);
     ParseURI(uriStart, &request->uri);
     std::tie(request->majorVersionNumber, request->minorVersionNumber) = ParseVersion(versionStart);
+    inputStream_.discardChars(n);
+}
+
+
+void
+Parser::parseResponseStartLine(Response *response)
+{
+    char *s;
+    std::size_t n;
+    std::tie(s, n) = peekCharsUntilCRLF(options_.maxStartLineSize);
+    s[n - 2] = '\0';
+    char *versionStart = s;
+
+    if (*versionStart == '\0') {
+        throw InvalidMessage();
+    }
+
+    char *versionEnd;
+
+    for (versionEnd = versionStart; *versionEnd != '\0'; ++versionEnd) {
+        if (isspace(*versionEnd)) {
+            break;
+        }
+    }
+
+    if (*versionEnd == '\0') {
+        throw InvalidMessage();
+    }
+
+    *versionEnd = '\0';
+    char *statusCodeStart;
+
+    for (statusCodeStart = versionEnd + 1; *statusCodeStart != '\0'; ++statusCodeStart) {
+        if (!isspace(*statusCodeStart)) {
+            break;
+        }
+    }
+
+    if (*statusCodeStart == '\0') {
+        throw InvalidMessage();
+    }
+
+    char *statusCodeEnd;
+
+    for (statusCodeEnd = statusCodeStart; *statusCodeEnd != '\0'; ++statusCodeEnd) {
+        if (isspace(*statusCodeEnd)) {
+            break;
+        }
+    }
+
+    if (*statusCodeEnd == '\0') {
+        throw InvalidMessage();
+    }
+
+    *statusCodeEnd = '\0';
+    char *reasonPhraseStart;
+
+    for (reasonPhraseStart = statusCodeEnd + 1; *reasonPhraseStart != '\0'; ++reasonPhraseStart) {
+        if (!isspace(*reasonPhraseStart)) {
+            break;
+        }
+    }
+
+    if (*reasonPhraseStart == '\0') {
+        throw InvalidMessage();
+    }
+
+    std::tie(response->majorVersionNumber
+             , response->minorVersionNumber) = ParseVersion(versionStart);
+    response->statusCode = ParseStatusCode(statusCodeStart);
+    response->reasonPhrase = reasonPhraseStart;
     inputStream_.discardChars(n);
 }
 
@@ -674,36 +776,36 @@ Parser::parseChunkSize()
 
 
 char *
-Parser::peekContent(std::size_t *contentSize)
+Parser::peekPayload(std::size_t *payloadSize)
 {
-    char *content;
+    char *payload;
 
-    if (*contentSize < bodyOrChunkSize_) {
-        content = inputStream_.peekChars(*contentSize);
+    if (*payloadSize < bodyOrChunkSize_) {
+        payload = inputStream_.peekChars(*payloadSize);
     } else {
         if (bodyIsChunked_) {
-            content = inputStream_.peekChars(chunkSize_ + 2);
+            payload = inputStream_.peekChars(chunkSize_ + 2);
 
-            if (!(content[chunkSize_] == '\r' && content[chunkSize_ + 1] == '\n')) {
+            if (!(payload[chunkSize_] == '\r' && payload[chunkSize_ + 1] == '\n')) {
                 throw InvalidMessage();
             }
         } else {
-            content = inputStream_.peekChars(bodySize_);
+            payload = inputStream_.peekChars(bodySize_);
         }
 
-        *contentSize = bodyOrChunkSize_;
+        *payloadSize = bodyOrChunkSize_;
     }
 
-    return content;
+    return payload;
 }
 
 
 void
-Parser::discardContent(std::size_t contentSize)
+Parser::discardPayload(std::size_t payloadSize)
 {
-    if (contentSize < bodyOrChunkSize_) {
-        inputStream_.discardChars(contentSize);
-        bodySize_ -= contentSize;
+    if (payloadSize < bodyOrChunkSize_) {
+        inputStream_.discardChars(payloadSize);
+        bodySize_ -= payloadSize;
     } else {
         if (bodyIsChunked_) {
             inputStream_.discardChars(chunkSize_ + 2);

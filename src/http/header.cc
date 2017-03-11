@@ -26,7 +26,7 @@ Header::sortFields() noexcept
 std::size_t
 Header::searchFields(const char *fieldName) const noexcept
 {
-    std::vector<Field>::const_iterator it = std::lower_bound(
+    auto it = std::lower_bound(
         fields_.begin(),
         fields_.end(),
         fieldName,
@@ -36,10 +36,10 @@ Header::searchFields(const char *fieldName) const noexcept
         }
     );
 
-    if (it == fields_.end() || std::strcmp(base_.c_str() + it->nameOffset, fieldName) != 0) {
-        return fields_.size();
-    } else {
+    if (it < fields_.end() && std::strcmp(base_.c_str() + it->nameOffset, fieldName) == 0) {
         return it - fields_.begin();
+    } else {
+        return fields_.size();
     }
  ;
 }
