@@ -22,12 +22,12 @@ public:
     inline explicit InputStream(Stream *, T &&);
 
     inline bool isValid() const noexcept;
-    inline char *peekChars(std::size_t);
-    inline void discardChars(std::size_t) noexcept;
+    inline char *peekData(std::size_t);
+    inline void discardData(std::size_t) noexcept;
 
 private:
     Stream *base_;
-    std::function<void (Stream *, std::size_t)> writer_;
+    std::function<void (Stream *)> writer_;
 
     inline void initialize(Stream *) noexcept;
     inline void move(InputStream *) noexcept;
@@ -104,30 +104,23 @@ InputStream::isValid() const noexcept
 
 
 char *
-InputStream::peekChars(std::size_t numberOfChars)
+InputStream::peekData(std::size_t dataSize)
 {
     SIREN_ASSERT(isValid());
-    std::size_t charCount = base_->getDataSize();
 
-    if (charCount < numberOfChars) {
-        writer_(base_, numberOfChars - charCount);
-        charCount = base_->getDataSize();
-
-        if (charCount < numberOfChars) {
-            throw EndOfStream();
-        }
+    while (base_->getDataSize() < dataSize) {
+        writer_(base_);
     }
 
-    auto chars = static_cast<char *>(base_->getData());
-    return chars;
+    return static_cast<char *>(base_->getData());
 }
 
 
 void
-InputStream::discardChars(std::size_t numberOfChars) noexcept
+InputStream::discardData(std::size_t dataSize) noexcept
 {
     SIREN_ASSERT(isValid());
-    base_->discardData(numberOfChars);
+    base_->discardData(dataSize);
 }
 
 } // namespace http

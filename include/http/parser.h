@@ -13,6 +13,7 @@ namespace siren {
 namespace http {
 
 class Header;
+class ParseException;
 class URI;
 enum class MethodType;
 enum class StatusCode;
@@ -46,6 +47,8 @@ public:
 
     void getRequest(Request *);
     void getResponse(Response *);
+    char *peekContentData(std::size_t *);
+    void discardContentData(std::size_t);
 
 private:
     ParserOptions options_;
@@ -54,9 +57,9 @@ private:
     bool bodyIsChunked_;
 
     union {
-        std::size_t bodySize_;
-        std::size_t chunkSize_;
-        std::size_t bodyOrChunkSize_;
+        std::size_t remainingBodySize_;
+        std::size_t remainingChunkSize_;
+        std::size_t remainingBodyOrChunkSize_;
     };
 
     static MethodType ParseMethod(const char *);
@@ -80,21 +83,49 @@ private:
     std::tuple<bool, std::size_t> parseBodyOrChunkSize(Header *);
     std::size_t parseFirstChunkSize();
     std::size_t parseChunkSize();
-    char *peekPayload(std::size_t *);
-    void discardPayload(std::size_t);
+
+    template <ParseException F()>
     std::tuple<char *, std::size_t> peekCharsUntilCRLF(std::size_t);
+
+    template <ParseException F()>
     std::tuple<char *, std::size_t> peekCharsUntilCRLFCRLF(std::size_t);
 };
 
 
-class InvalidMessage
+enum class ParseExceptionType
+{
+    InvalidMessage = 0,
+    UnknownMethod,
+    UnknownStatus,
+    StartLineTooLong,
+    HeaderTooLarge,
+    BodyTooLarge,
+};
+
+
+class ParseException final
   : public std::exception
 {
 public:
-    explicit InvalidMessage() noexcept;
+    typedef ParseExceptionType Type;
+
+    inline Type getType() const noexcept;
+
+    explicit ParseException(Type) noexcept;
 
     const char *what() const noexcept override;
+
+private:
+    Type type_;
 };
+
+
+inline ParseException InvalidMessage();
+inline ParseException UnknownMethod();
+inline ParseException UnknownStatus();
+inline ParseException StartLineTooLong();
+inline ParseException HeaderTooLarge();
+inline ParseException BodyTooLarge();
 
 } // namespace http
 
@@ -107,8 +138,6 @@ public:
 
 
 #include <utility>
-
-#include <siren/assert.h>
 
 
 namespace siren {
@@ -131,14 +160,52 @@ Parser::isValid() const noexcept
 }
 
 
-template <class T>
-void
-Parser::getPayload(std::size_t playloadSize, T &&callback)
+ParseExceptionType
+ParseException::getType() const noexcept
 {
-    SIREN_ASSERT(isValid());
-    char *playload = peekPayload(&playloadSize);
-    callback(playload, playloadSize);
-    discardPayload(playloadSize);
+    return type_;
+}
+
+
+ParseException
+InvalidMessage()
+{
+    return ParseException(ParseExceptionType::InvalidMessage);
+}
+
+
+ParseException
+UnknownMethod()
+{
+    return ParseException(ParseExceptionType::UnknownMethod);
+}
+
+
+ParseException
+UnknownStatus()
+{
+    return ParseException(ParseExceptionType::UnknownStatus);
+}
+
+
+ParseException
+StartLineTooLong()
+{
+    return ParseException(ParseExceptionType::StartLineTooLong);
+}
+
+
+ParseException
+HeaderTooLarge()
+{
+    return ParseException(ParseExceptionType::HeaderTooLarge);
+}
+
+
+ParseException
+BodyTooLarge()
+{
+    return ParseException(ParseExceptionType::BodyTooLarge);
 }
 
 } // namespace http

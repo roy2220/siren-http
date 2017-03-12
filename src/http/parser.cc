@@ -3,6 +3,7 @@
 #include <cstring>
 #include <limits>
 
+#include <siren/assert.h>
 #include <siren/utility.h>
 
 #include "http/request.h"
@@ -139,7 +140,7 @@ Parser::ParseMethod(const char *s)
         }
     }
 
-    throw InvalidMessage();
+    throw UnknownMethod();
 }
 
 
@@ -326,7 +327,7 @@ Parser::ParseStatusCode(const char *s)
     int rawStatusCode = ParseNumber<int>(s);
 
     if (!TestRawStatusCode(rawStatusCode)) {
-        throw InvalidMessage();
+        throw UnknownStatus();
     }
 
     return static_cast<StatusCode>(rawStatusCode);
@@ -484,7 +485,7 @@ void
 Parser::initialize() noexcept
 {
     bodyIsChunked_ = false;
-    bodySize_ = 0;
+    remainingBodySize_ = 0;
     InitializeCharFlags();
 }
 
@@ -497,7 +498,7 @@ Parser::move(Parser *other) noexcept
     }
 
     other->bodyIsChunked_ = bodyIsChunked_;
-    other->bodyOrChunkSize_ = bodyOrChunkSize_;
+    other->remainingBodyOrChunkSize_ = remainingBodyOrChunkSize_;
 }
 
 
@@ -505,11 +506,11 @@ void
 Parser::getRequest(Request *request)
 {
     SIREN_ASSERT(isValid());
-    SIREN_ASSERT(!bodyIsChunked_ && bodySize_ == 0);
+    SIREN_ASSERT(!bodyIsChunked_ && remainingBodySize_ == 0);
     SIREN_ASSERT(request != nullptr);
     parseRequestStartLine(request);
     parseHeader(&request->header);
-    std::tie(bodyIsChunked_, bodyOrChunkSize_) = parseBodyOrChunkSize(&request->header);
+    std::tie(bodyIsChunked_, remainingBodyOrChunkSize_) = parseBodyOrChunkSize(&request->header);
 }
 
 
@@ -517,11 +518,60 @@ void
 Parser::getResponse(Response *response)
 {
     SIREN_ASSERT(isValid());
-    SIREN_ASSERT(!bodyIsChunked_ && bodySize_ == 0);
+    SIREN_ASSERT(!bodyIsChunked_ && remainingBodySize_ == 0);
     SIREN_ASSERT(response != nullptr);
     parseResponseStartLine(response);
     parseHeader(&response->header);
-    std::tie(bodyIsChunked_, bodyOrChunkSize_) = parseBodyOrChunkSize(&response->header);
+    std::tie(bodyIsChunked_, remainingBodyOrChunkSize_) = parseBodyOrChunkSize(&response->header);
+}
+
+
+char *
+Parser::peekContentData(std::size_t *contentDataSize)
+{
+    char *contentData;
+
+    if (*contentDataSize < remainingBodyOrChunkSize_) {
+        contentData = inputStream_.peekData(*contentDataSize);
+    } else {
+        if (bodyIsChunked_) {
+            contentData = inputStream_.peekData(remainingChunkSize_ + 2);
+
+            if (!(contentData[remainingChunkSize_] == '\r'
+                  && contentData[remainingChunkSize_ + 1] == '\n')) {
+                throw InvalidMessage();
+            }
+        } else {
+            contentData = inputStream_.peekData(remainingBodySize_);
+        }
+
+        *contentDataSize = remainingBodyOrChunkSize_;
+    }
+
+    return contentData;
+}
+
+
+void
+Parser::discardContentData(std::size_t contentDataSize)
+{
+    if (contentDataSize < remainingBodyOrChunkSize_) {
+        inputStream_.discardData(contentDataSize);
+        remainingBodyOrChunkSize_ -= contentDataSize;
+    } else {
+        if (bodyIsChunked_) {
+            inputStream_.discardData(remainingChunkSize_ + 2);
+
+            if (remainingChunkSize_ == 0) {
+                bodyIsChunked_ = false;
+            } else {
+                remainingChunkSize_ = parseChunkSize();
+            }
+        } else {
+            inputStream_.discardData(remainingBodySize_);
+            remainingBodySize_ = 0;
+        }
+    }
 }
 
 
@@ -530,7 +580,7 @@ Parser::parseRequestStartLine(Request *request)
 {
     char *s;
     std::size_t n;
-    std::tie(s, n) = peekCharsUntilCRLF(options_.maxStartLineSize);
+    std::tie(s, n) = peekCharsUntilCRLF<StartLineTooLong>(options_.maxStartLineSize);
     s[n - 2] = '\0';
     char *methodNameStart = s;
 
@@ -591,7 +641,7 @@ Parser::parseRequestStartLine(Request *request)
     request->methodType = ParseMethod(methodNameStart);
     ParseURI(uriStart, &request->uri);
     std::tie(request->majorVersionNumber, request->minorVersionNumber) = ParseVersion(versionStart);
-    inputStream_.discardChars(n);
+    inputStream_.discardData(n);
 }
 
 
@@ -600,7 +650,7 @@ Parser::parseResponseStartLine(Response *response)
 {
     char *s;
     std::size_t n;
-    std::tie(s, n) = peekCharsUntilCRLF(options_.maxStartLineSize);
+    std::tie(s, n) = peekCharsUntilCRLF<StartLineTooLong>(options_.maxStartLineSize);
     s[n - 2] = '\0';
     char *versionStart = s;
 
@@ -662,7 +712,7 @@ Parser::parseResponseStartLine(Response *response)
              , response->minorVersionNumber) = ParseVersion(versionStart);
     response->statusCode = ParseStatusCode(statusCodeStart);
     response->reasonPhrase = reasonPhraseStart;
-    inputStream_.discardChars(n);
+    inputStream_.discardData(n);
 }
 
 
@@ -670,17 +720,17 @@ void
 Parser::parseHeader(Header *header)
 {
     std::size_t n = 2;
-    char *s = inputStream_.peekChars(n);
+    char *s = inputStream_.peekData(n);
     bool headerHasFields = !(*s == '\r' && s[1] == '\n');
 
     if (headerHasFields) {
-        std::tie(s, n) = peekCharsUntilCRLFCRLF(options_.maxHeaderSize);
+        std::tie(s, n) = peekCharsUntilCRLFCRLF<HeaderTooLarge>(options_.maxHeaderSize);
         s[n - 2] = '\0';
         const char *headerFieldsStart = s;
         ParseHeaderFields(headerFieldsStart, header);
     }
 
-    inputStream_.discardChars(n);
+    inputStream_.discardData(n);
 }
 
 
@@ -731,7 +781,7 @@ Parser::parseBodyOrChunkSize(Header *header)
     } else {
         if (bodySizeIsDefined) {
             if (bodySize > options_.maxBodySize) {
-                throw InvalidMessage();
+                throw BodyTooLarge();
             }
         } else {
             bodySize = 0;
@@ -755,7 +805,8 @@ Parser::parseChunkSize()
 {
     char *s;
     std::size_t n;
-    std::tie(s, n) = peekCharsUntilCRLF((std::numeric_limits<std::size_t>::digits + 3) / 4 + 2);
+    std::tie(s, n) = peekCharsUntilCRLF<InvalidMessage>((std::numeric_limits<std::size_t>::digits
+                                                         + 3) / 4 + 2);
     char *chunkSizeStart = s;
     char *chunkSizeEnd = s + n - 2;
 
@@ -766,63 +817,16 @@ Parser::parseChunkSize()
     std::size_t chunkSize = ParseNumber<std::size_t, 16>(chunkSizeStart, chunkSizeEnd);
 
     if (chunkSize > maxChunkSize_) {
-        throw InvalidMessage();
+        throw BodyTooLarge();
     }
 
     maxChunkSize_ -= chunkSize;
-    inputStream_.discardChars(n);
+    inputStream_.discardData(n);
     return chunkSize;
 }
 
 
-char *
-Parser::peekPayload(std::size_t *payloadSize)
-{
-    char *payload;
-
-    if (*payloadSize < bodyOrChunkSize_) {
-        payload = inputStream_.peekChars(*payloadSize);
-    } else {
-        if (bodyIsChunked_) {
-            payload = inputStream_.peekChars(chunkSize_ + 2);
-
-            if (!(payload[chunkSize_] == '\r' && payload[chunkSize_ + 1] == '\n')) {
-                throw InvalidMessage();
-            }
-        } else {
-            payload = inputStream_.peekChars(bodySize_);
-        }
-
-        *payloadSize = bodyOrChunkSize_;
-    }
-
-    return payload;
-}
-
-
-void
-Parser::discardPayload(std::size_t payloadSize)
-{
-    if (payloadSize < bodyOrChunkSize_) {
-        inputStream_.discardChars(payloadSize);
-        bodySize_ -= payloadSize;
-    } else {
-        if (bodyIsChunked_) {
-            inputStream_.discardChars(chunkSize_ + 2);
-
-            if (chunkSize_ == 0) {
-                bodyIsChunked_ = false;
-            } else {
-                chunkSize_ = parseChunkSize();
-            }
-        } else {
-            inputStream_.discardChars(bodySize_);
-            bodySize_ = 0;
-        }
-    }
-}
-
-
+template <ParseException F()>
 std::tuple<char *, std::size_t>
 Parser::peekCharsUntilCRLF(std::size_t maxNumberOfChars)
 {
@@ -830,10 +834,10 @@ Parser::peekCharsUntilCRLF(std::size_t maxNumberOfChars)
 
     for (;;) {
         if (charCount > maxNumberOfChars) {
-            throw InvalidMessage();
+            throw F();
         }
 
-        char *chars = inputStream_.peekChars(charCount);
+        char *chars = inputStream_.peekData(charCount);
         int c1 = chars[charCount - 2];
         int c2 = chars[charCount - 1];
 
@@ -854,6 +858,7 @@ Parser::peekCharsUntilCRLF(std::size_t maxNumberOfChars)
 }
 
 
+template <ParseException F()>
 std::tuple<char *, std::size_t>
 Parser::peekCharsUntilCRLFCRLF(std::size_t maxNumberOfChars)
 {
@@ -861,10 +866,10 @@ Parser::peekCharsUntilCRLFCRLF(std::size_t maxNumberOfChars)
 
     for (;;) {
         if (charCount > maxNumberOfChars) {
-            throw InvalidMessage();
+            throw F();
         }
 
-        char *chars = inputStream_.peekChars(charCount);
+        char *chars = inputStream_.peekData(charCount);
         int c1 = chars[charCount - 4];
         int c2 = chars[charCount - 3];
         int c3 = chars[charCount - 2];
@@ -895,14 +900,25 @@ Parser::peekCharsUntilCRLFCRLF(std::size_t maxNumberOfChars)
 }
 
 
-InvalidMessage::InvalidMessage() noexcept
+ParseException::ParseException(Type type) noexcept
+  : type_(type)
 {
 }
 
 
-const char *InvalidMessage::what() const noexcept
+const char *
+ParseException::what() const noexcept
 {
-    return "Siren: Invalid HTTP message";
+    static const char *descriptions[] = {
+        "Invalid message",
+        "Unknown method",
+        "Unknown status",
+        "Start line too long",
+        "Header too large",
+        "Body too large",
+    };
+
+    return descriptions[static_cast<int>(type_)];
 }
 
 
