@@ -35,20 +35,19 @@ public:
     typedef ParserOptions Options;
 
     inline bool isValid() const noexcept;
+    inline bool bodyIsChunked() const noexcept;
+    inline std::size_t getRemainingBodyOrChunkSize() const noexcept;
 
     template <class ...T>
     inline explicit Parser(const Options &, T &&...);
-
-    template <class T>
-    inline void getPayload(std::size_t, T &&);
 
     Parser(Parser &&) noexcept;
     Parser &operator=(Parser &&) noexcept;
 
     void getRequest(Request *);
     void getResponse(Response *);
-    char *peekContentData(std::size_t *);
-    void discardContentData(std::size_t);
+    char *peekPayloadData(std::size_t *);
+    void discardPayloadData(std::size_t);
 
 private:
     ParserOptions options_;
@@ -133,11 +132,13 @@ inline ParseException BodyTooLarge();
 
 
 /*
- * #include "parser-inl.h"
+ * #include "http/parser-inl.h"
  */
 
 
 #include <utility>
+
+#include <siren/assert.h>
 
 
 namespace siren {
@@ -157,6 +158,22 @@ bool
 Parser::isValid() const noexcept
 {
     return inputStream_.isValid();
+}
+
+
+bool
+Parser::bodyIsChunked() const noexcept
+{
+    SIREN_ASSERT(isValid());
+    return bodyIsChunked_;
+}
+
+
+std::size_t
+Parser::getRemainingBodyOrChunkSize() const noexcept
+{
+    SIREN_ASSERT(isValid());
+    return remainingBodyOrChunkSize_;
 }
 
 

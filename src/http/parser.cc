@@ -3,7 +3,6 @@
 #include <cstring>
 #include <limits>
 
-#include <siren/assert.h>
 #include <siren/utility.h>
 
 #include "http/request.h"
@@ -286,11 +285,11 @@ Parser::ParseURI(const char *s, URI *uri)
 std::tuple<unsigned short, unsigned short>
 Parser::ParseVersion(const char *s)
 {
-    if (std::strncmp(s, "HTTP/", sizeof("HTTP/") - 1) != 0) {
+    if (std::strncmp(s, "HTTP/", SIREN_STRLEN("HTTP/")) != 0) {
         throw InvalidMessage();
     }
 
-    const char *majorVersionNumberStart = s + sizeof("HTTP/") - 1;
+    const char *majorVersionNumberStart = s + SIREN_STRLEN("HTTP/");
     const char *majorVersionNumberEnd;
 
     for (majorVersionNumberEnd = majorVersionNumberStart; *majorVersionNumberEnd != '\0'
@@ -527,40 +526,44 @@ Parser::getResponse(Response *response)
 
 
 char *
-Parser::peekContentData(std::size_t *contentDataSize)
+Parser::peekPayloadData(std::size_t *payloadDataSize)
 {
-    char *contentData;
+    SIREN_ASSERT(isValid());
+    SIREN_ASSERT(payloadDataSize != nullptr);
+    char *payloadData;
 
-    if (*contentDataSize < remainingBodyOrChunkSize_) {
-        contentData = inputStream_.peekData(*contentDataSize);
+    if (*payloadDataSize < remainingBodyOrChunkSize_) {
+        payloadData = inputStream_.peekData(*payloadDataSize);
     } else {
         if (bodyIsChunked_) {
-            contentData = inputStream_.peekData(remainingChunkSize_ + 2);
+            payloadData = inputStream_.peekData(remainingChunkSize_ + 2);
 
-            if (!(contentData[remainingChunkSize_] == '\r'
-                  && contentData[remainingChunkSize_ + 1] == '\n')) {
+            if (!(payloadData[remainingChunkSize_] == '\r'
+                  && payloadData[remainingChunkSize_ + 1] == '\n')) {
                 throw InvalidMessage();
             }
         } else {
-            contentData = inputStream_.peekData(remainingBodySize_);
+            payloadData = inputStream_.peekData(remainingBodySize_);
         }
 
-        *contentDataSize = remainingBodyOrChunkSize_;
+        *payloadDataSize = remainingBodyOrChunkSize_;
     }
 
-    return contentData;
+    return payloadData;
 }
 
 
 void
-Parser::discardContentData(std::size_t contentDataSize)
+Parser::discardPayloadData(std::size_t payloadDataSize)
 {
-    if (contentDataSize < remainingBodyOrChunkSize_) {
-        inputStream_.discardData(contentDataSize);
-        remainingBodyOrChunkSize_ -= contentDataSize;
+    SIREN_ASSERT(isValid());
+
+    if (payloadDataSize < remainingBodyOrChunkSize_) {
+        inputStream_.discardData(payloadDataSize);
+        remainingBodyOrChunkSize_ -= payloadDataSize;
     } else {
         if (bodyIsChunked_) {
-            inputStream_.discardData(remainingChunkSize_ + 2);
+            inputStream_.discardData(remainingChunkSize_ + SIREN_STRLEN("\r\n"));
 
             if (remainingChunkSize_ == 0) {
                 bodyIsChunked_ = false;
@@ -737,8 +740,22 @@ Parser::parseHeader(Header *header)
 std::tuple<bool, std::size_t>
 Parser::parseBodyOrChunkSize(Header *header)
 {
-    header->sortFields();
-    bool bodyIsChunked;
+    header->sort();
+    bool bodyIsChunked = false;
+
+    header->search("Transfer-Encoding", [&] (std::size_t headerFieldIndex
+                                             , const char *headerFieldValue) -> bool {
+        if (std::strcmp(headerFieldValue, "chunked") == 0) {
+            if (bodyIsChunked) {
+                throw InvalidMessage();
+            }
+
+            bodyIsChunked = true;
+            header->removeField(headerFieldIndex);
+        }
+
+        return true;
+    });
 
     union {
         std::size_t bodySize;
@@ -748,29 +765,21 @@ Parser::parseBodyOrChunkSize(Header *header)
 
     bool bodySizeIsDefined = false;
 
-    {
-        std::size_t fieldIndex = header->searchFields("Transfer-Encoding");
-
-        if (fieldIndex == header->getNumberOfFields()) {
-            bodyIsChunked = false;
-        } else {
-            const char *fieldValue = header->getFieldValue(fieldIndex);
-            bodyIsChunked = std::strcmp(fieldValue, "chunked") == 0;
-        }
-    }
-
-    {
-        std::size_t fieldIndex = header->searchFields("Content-Length");
-
-        if (fieldIndex != header->getNumberOfFields()) {
-            const char *fieldValue = header->getFieldValue(fieldIndex);
-
-            if (*fieldValue != '\0') {
-                bodySize = ParseNumber<std::size_t, 8>(fieldValue);
-                bodySizeIsDefined = true;
+    header->search("Content-Length"
+                   , [&, &bodySize = bodySize] (std::size_t headerFieldIndex
+                                                , const char *headerFieldValue) -> bool {
+        if (*headerFieldValue != '\0') {
+            if (bodySizeIsDefined) {
+                throw InvalidMessage();
             }
+
+            bodySize = ParseNumber<std::size_t, 8>(headerFieldValue);
+            bodySizeIsDefined = true;
         }
-    }
+
+        header->removeField(headerFieldIndex);
+        return true;
+    });
 
     if (bodyIsChunked) {
         if (bodySizeIsDefined) {
@@ -803,10 +812,11 @@ Parser::parseFirstChunkSize()
 std::size_t
 Parser::parseChunkSize()
 {
+    constexpr unsigned int k = (std::numeric_limits<std::size_t>::digits + 3) / 4;
+
     char *s;
     std::size_t n;
-    std::tie(s, n) = peekCharsUntilCRLF<InvalidMessage>((std::numeric_limits<std::size_t>::digits
-                                                         + 3) / 4 + 2);
+    std::tie(s, n) = peekCharsUntilCRLF<InvalidMessage>(k + 2);
     char *chunkSizeStart = s;
     char *chunkSizeEnd = s + n - 2;
 
@@ -909,7 +919,7 @@ ParseException::ParseException(Type type) noexcept
 const char *
 ParseException::what() const noexcept
 {
-    static const char *descriptions[] = {
+    static const char *const descriptions[] = {
         "Invalid message",
         "Unknown method",
         "Unknown status",

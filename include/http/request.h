@@ -11,7 +11,7 @@ namespace http {
 
 enum class MethodType
 {
-    Connect,
+    Connect = 0,
     Delete,
     Get,
     Head,
@@ -31,6 +31,9 @@ struct Request
     unsigned short minorVersionNumber;
     Header header;
 };
+
+
+const char *GetMethodName(MethodType) noexcept;
 
 } // namespace http
 

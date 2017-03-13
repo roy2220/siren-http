@@ -64,7 +64,7 @@ private:
 
 
 /*
- * #include "uri-inl.h"
+ * #include "http/uri-inl.h"
  */
 
 
@@ -177,66 +177,66 @@ URI::getFragmentID() const noexcept
 
 template <class ...T>
 void
-URI::setSchemeName(T &&...arguments)
+URI::setSchemeName(T &&...argument)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(arguments)...);
+    base_.append(std::forward<T>(argument)...);
     schemeNameOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setUserInfo(T &&...arguments)
+URI::setUserInfo(T &&...argument)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(arguments)...);
+    base_.append(std::forward<T>(argument)...);
     userInfoOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setHostName(T &&...arguments)
+URI::setHostName(T &&...argument)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(arguments)...);
+    base_.append(std::forward<T>(argument)...);
     hostNameOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setPathName(T &&...arguments)
+URI::setPathName(T &&...argument)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(arguments)...);
+    base_.append(std::forward<T>(argument)...);
     pathNameOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setQueryString(T &&...arguments)
+URI::setQueryString(T &&...argument)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(arguments)...);
+    base_.append(std::forward<T>(argument)...);
     queryStringOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setFragmentID(T &&...arguments)
+URI::setFragmentID(T &&...argument)
 {
     std::size_t offset = base_.size();
     base_.push_back('\0');
-    base_.append(std::forward<T>(arguments)...);
+    base_.append(std::forward<T>(argument)...);
     fragmentIDOffset_ = offset;
 }
 
