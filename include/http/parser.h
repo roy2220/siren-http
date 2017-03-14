@@ -21,7 +21,7 @@ struct Request;
 struct Response;
 
 
-struct ParserOptions
+struct ParseOptions
 {
     std::size_t maxStartLineSize = 4 * 1024;
     std::size_t maxHeaderSize = 16 * 1024;
@@ -32,7 +32,7 @@ struct ParserOptions
 class Parser final
 {
 public:
-    typedef ParserOptions Options;
+    typedef ParseOptions Options;
 
     inline bool isValid() const noexcept;
     inline bool bodyIsChunked() const noexcept;
@@ -50,7 +50,7 @@ public:
     void discardPayloadData(std::size_t);
 
 private:
-    ParserOptions options_;
+    ParseOptions options_;
     std::size_t maxChunkSize_;
     InputStream inputStream_;
     bool bodyIsChunked_;

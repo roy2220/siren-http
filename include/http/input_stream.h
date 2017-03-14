@@ -18,7 +18,7 @@ public:
     inline InputStream(InputStream &&) noexcept;
     inline InputStream &operator=(InputStream &&) noexcept;
 
-    template <class T, class = std::enable_if_t<!std::is_same<T, nullptr_t>::value, void>>
+    template <class T, class = std::enable_if_t<!std::is_same<T, nullptr_t>::value>>
     inline explicit InputStream(Stream *, T &&);
 
     inline bool isValid() const noexcept;

@@ -54,32 +54,48 @@ Dumper::move(Dumper *other) noexcept
 
 
 void
-Dumper::putRequest(const Request &request, bool bodyIsChunked, std::size_t bodySize)
+Dumper::putRequest(const Request &request)
 {
     SIREN_ASSERT(isValid());
     SIREN_ASSERT(!bodyIsChunked_ && remainingBodySize_ == 0);
     dumpRequestStartLine(request);
-    dumpHeader(request.header, bodyIsChunked, bodySize);
-    bodyIsChunked_ = bodyIsChunked;
-
-    if (!bodyIsChunked) {
-        remainingBodySize_ = bodySize;
-    }
+    dumpHeader(request.header, true, -1);
+    bodyIsChunked_ = true;
 }
 
 
 void
-Dumper::putResponse(const Response &response, bool bodyIsChunked, std::size_t bodySize)
+Dumper::putRequest(const Request &request, std::size_t bodySize)
+{
+    SIREN_ASSERT(isValid());
+    SIREN_ASSERT(!bodyIsChunked_ && remainingBodySize_ == 0);
+    dumpRequestStartLine(request);
+    dumpHeader(request.header, false, bodySize);
+    bodyIsChunked_ = false;
+    remainingBodySize_ = bodySize;
+}
+
+
+void
+Dumper::putResponse(const Response &response)
 {
     SIREN_ASSERT(isValid());
     SIREN_ASSERT(!bodyIsChunked_ && remainingBodySize_ == 0);
     dumpResponseStartLine(response);
-    dumpHeader(response.header, bodyIsChunked, bodySize);
-    bodyIsChunked_ = bodyIsChunked;
+    dumpHeader(response.header, true, -1);
+    bodyIsChunked_ = true;
+}
 
-    if (!bodyIsChunked) {
-        remainingBodySize_ = bodySize;
-    }
+
+void
+Dumper::putResponse(const Response &response, std::size_t bodySize)
+{
+    SIREN_ASSERT(isValid());
+    SIREN_ASSERT(!bodyIsChunked_ && remainingBodySize_ == 0);
+    dumpResponseStartLine(response);
+    dumpHeader(response.header, false, bodySize);
+    bodyIsChunked_ = false;
+    remainingBodySize_ = bodySize;
 }
 
 
@@ -168,7 +184,7 @@ Dumper::dumpRequestStartLine(const Request &request)
     char *s2 = s1;
     s2 += std::sprintf(s2, "%s ", methodName);
 
-    if (*pathName == '*') {
+    if (*pathName == '\0') {
         *s2++ = '*';
     } else {
         if (*schemeName != '\0') {
@@ -245,20 +261,22 @@ Dumper::dumpHeader(const Header &header, bool bodyIsChunked, std::size_t bodySiz
         *s2++ = '\n';
         n += s2 - s1;
     } else {
-        constexpr unsigned int k = (std::numeric_limits<std::size_t>::digits + 2) / 3;
+        if (bodySize >= 1) {
+            constexpr unsigned int k = (std::numeric_limits<std::size_t>::digits + 2) / 3;
 
-        char *s1 = outputStream_.reserveBuffer(
-            n +
-            SIREN_STRLEN("Content-Length: ") +
-            k +
-            SIREN_STRLEN("\r\n")
-        ) + n;
+            char *s1 = outputStream_.reserveBuffer(
+                n +
+                SIREN_STRLEN("Content-Length: ") +
+                k +
+                SIREN_STRLEN("\r\n")
+            ) + n;
 
-        char *s2 = s1;
-        s2 += std::sprintf(s2, "Content-Length: %zo", bodySize);
-        *s2++ = '\r';
-        *s2++ = '\n';
-        n += s2 - s1;
+            char *s2 = s1;
+            s2 += std::sprintf(s2, "Content-Length: %zo", bodySize);
+            *s2++ = '\r';
+            *s2++ = '\n';
+            n += s2 - s1;
+        }
     }
 
     header.traverse([&] (std::size_t, const char *headerFieldName , const char *headerFieldValue)

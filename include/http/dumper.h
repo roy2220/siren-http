@@ -26,8 +26,10 @@ public:
     Dumper(Dumper &&) noexcept;
     Dumper &operator=(Dumper &&) noexcept;
 
-    void putRequest(const Request &, bool = false, std::size_t = 0);
-    void putResponse(const Response &, bool = false, std::size_t = 0);
+    void putRequest(const Request &);
+    void putRequest(const Request &, std::size_t);
+    void putResponse(const Response &);
+    void putResponse(const Response &, std::size_t);
     char *reservePayloadBuffer(std::size_t);
     void flushPayloadBuffer(std::size_t);
 
