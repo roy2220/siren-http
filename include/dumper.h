@@ -1,7 +1,7 @@
 #pragma once
 
 
-#include "http/output_stream.h"
+#include "output_stream.h"
 
 
 namespace siren {
@@ -51,7 +51,7 @@ private:
 
 
 /*
- * #include "http/dumper-inl.h"
+ * #include "dumper-inl.h"
  */
 
 

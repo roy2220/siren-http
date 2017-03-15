@@ -39,7 +39,7 @@ private:
 
 
 /*
- * #include "http/input_stream-inl.h"
+ * #include "input_stream-inl.h"
  */
 
 

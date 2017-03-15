@@ -1,4 +1,4 @@
-#include "http/dumper.h"
+#include "dumper.h"
 
 #include <cinttypes>
 #include <cstdio>
@@ -7,8 +7,8 @@
 
 #include <siren/utility.h>
 
-#include "http/request.h"
-#include "http/response.h"
+#include "request.h"
+#include "response.h"
 
 
 namespace siren {
@@ -280,7 +280,7 @@ Dumper::dumpHeader(const Header &header, bool bodyIsChunked, std::size_t bodySiz
     }
 
     header.traverse([&] (std::size_t, const char *headerFieldName , const char *headerFieldValue)
-                    -> bool {
+                    -> void {
         char *s1 = outputStream_.reserveBuffer(
             n +
             std::strlen(headerFieldName) +
@@ -294,7 +294,6 @@ Dumper::dumpHeader(const Header &header, bool bodyIsChunked, std::size_t bodySiz
         *s2++ = '\r';
         *s2++ = '\n';
         n += s2 - s1;
-        return true;
     });
 
     {

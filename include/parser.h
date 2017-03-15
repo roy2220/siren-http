@@ -5,7 +5,7 @@
 #include <exception>
 #include <tuple>
 
-#include "http/input_stream.h"
+#include "input_stream.h"
 
 
 namespace siren {
@@ -46,7 +46,7 @@ public:
 
     void getRequest(Request *);
     void getResponse(Response *);
-    char *peekPayloadData(std::size_t *);
+    char *peekPayloadData(std::size_t);
     void discardPayloadData(std::size_t);
 
 private:
@@ -132,7 +132,7 @@ inline ParseException BodyTooLarge();
 
 
 /*
- * #include "http/parser-inl.h"
+ * #include "parser-inl.h"
  */
 
 

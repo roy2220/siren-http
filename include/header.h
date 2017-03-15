@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <string>
-#include <tuple>
 #include <vector>
 
 
@@ -60,7 +59,7 @@ private:
 
 
 /*
- * #include "http/header-inl.h"
+ * #include "header-inl.h"
  */
 
 
@@ -135,10 +134,7 @@ Header::traverse(T &&callback) const
         if (it->valueOffset >= 1) {
             const char *fieldName = base_.c_str() + it->nameOffset;
             const char *fieldValue = base_.c_str() + it->valueOffset;
-
-            if (!callback(it - fields_.begin(), fieldName, fieldValue)) {
-                break;
-            }
+            callback(it - fields_.begin(), fieldName, fieldValue);
         }
     }
 }

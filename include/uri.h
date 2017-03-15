@@ -64,7 +64,7 @@ private:
 
 
 /*
- * #include "http/uri-inl.h"
+ * #include "uri-inl.h"
  */
 
 
@@ -234,8 +234,8 @@ template <class ...T>
 void
 URI::setFragmentID(T &&...argument)
 {
-    std::size_t offset = base_.size();
     base_.push_back('\0');
+    std::size_t offset = base_.size();
     base_.append(std::forward<T>(argument)...);
     fragmentIDOffset_ = offset;
 }

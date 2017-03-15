@@ -1,42 +1,45 @@
-#include "http/parser.h"
+#include "parser.h"
 
 #include <cstring>
 #include <limits>
 
 #include <siren/utility.h>
 
-#include "http/request.h"
-#include "http/response.h"
+#include "request.h"
+#include "response.h"
 
 
 namespace siren {
 
 namespace http {
 
-#define ALPHA "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#define ALPHANUM ALPHA DIGIT
-#define DIGIT "0123456789"
-#define HEXDIGIT DIGIT "abcdefABCDEF"
-#define OCTDIGIT "01234567"
-#define SPACE " \t\n\v\f\r"
+#define DIGIT '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
+#define HEXDIGIT DIGIT, 'a', 'b', 'c', 'd', 'e', 'f', 'A', 'B', 'C', 'D', 'E', 'F'
+#define LETTER 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q' \
+               , 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G' \
+               , 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W' \
+               , 'X', 'Y', 'Z'
+#define OCTDIGIT '0', '1', '2', '3', '4', '5', '6', '7'
+#define PRINT DIGIT, LETTER, ' ', '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-' \
+              , '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{' \
+              , '|', '}', '~'
+#define SPACE ' ', '\t', '\n', '\v', '\f', '\r'
 
 
 namespace {
 
 struct {
-    unsigned char alpha: 1;
-    unsigned char alphanum: 1;
     unsigned char digit: 1;
     unsigned char hexdigit: 1;
     unsigned char octdigit: 1;
+    unsigned char print: 1;
     unsigned char space: 1;
 } CharFlags[256];
 
 
 char tolower(char) noexcept;
-bool isalpha(char c) noexcept;
-bool isalphanum(char c) noexcept;
-bool isspace(char c) noexcept;
+bool isprint(char) noexcept;
+bool isspace(char) noexcept;
 void InitializeCharFlags() noexcept;
 
 template <std::size_t N = 10>
@@ -380,7 +383,7 @@ Parser::ParseNumber(const char *s)
             throw InvalidMessage();
         }
 
-        if (number > k1 || (number == k1 && digit2int<N>(*s) > k2)) {
+        if (number > k1 || (number == k1 && static_cast<T>(digit2int<N>(*s)) > k2)) {
             throw InvalidMessage();
         }
 
@@ -405,7 +408,7 @@ Parser::ParseNumber(const char *s1, const char *s2)
             throw InvalidMessage();
         }
 
-        if (number > k1 || (number == k1 && digit2int<N>(*s1) > k2)) {
+        if (number > k1 || (number == k1 && static_cast<T>(digit2int<N>(*s1)) > k2)) {
             throw InvalidMessage();
         }
 
@@ -526,14 +529,14 @@ Parser::getResponse(Response *response)
 
 
 char *
-Parser::peekPayloadData(std::size_t *payloadDataSize)
+Parser::peekPayloadData(std::size_t payloadDataSize)
 {
     SIREN_ASSERT(isValid());
-    SIREN_ASSERT(payloadDataSize != nullptr);
+    SIREN_ASSERT(payloadDataSize <= remainingBodyOrChunkSize_);
     char *payloadData;
 
-    if (*payloadDataSize < remainingBodyOrChunkSize_) {
-        payloadData = inputStream_.peekData(*payloadDataSize);
+    if (payloadDataSize < remainingBodyOrChunkSize_) {
+        payloadData = inputStream_.peekData(payloadDataSize);
     } else {
         if (bodyIsChunked_) {
             payloadData = inputStream_.peekData(remainingChunkSize_ + 2);
@@ -545,8 +548,6 @@ Parser::peekPayloadData(std::size_t *payloadDataSize)
         } else {
             payloadData = inputStream_.peekData(remainingBodySize_);
         }
-
-        *payloadDataSize = remainingBodyOrChunkSize_;
     }
 
     return payloadData;
@@ -557,6 +558,7 @@ void
 Parser::discardPayloadData(std::size_t payloadDataSize)
 {
     SIREN_ASSERT(isValid());
+    SIREN_ASSERT(payloadDataSize <= remainingBodyOrChunkSize_);
 
     if (payloadDataSize < remainingBodyOrChunkSize_) {
         inputStream_.discardData(payloadDataSize);
@@ -584,6 +586,13 @@ Parser::parseRequestStartLine(Request *request)
     char *s;
     std::size_t n;
     std::tie(s, n) = peekCharsUntilCRLF<StartLineTooLong>(options_.maxStartLineSize);
+
+    for (std::size_t i = 0; i < n - 2; ++i) {
+        if (!(isprint(s[i]) || isspace(s[i]))) {
+            throw InvalidMessage();
+        }
+    }
+
     s[n - 2] = '\0';
     char *methodNameStart = s;
 
@@ -654,6 +663,13 @@ Parser::parseResponseStartLine(Response *response)
     char *s;
     std::size_t n;
     std::tie(s, n) = peekCharsUntilCRLF<StartLineTooLong>(options_.maxStartLineSize);
+
+    for (std::size_t i = 0; i < n - 2; ++i) {
+        if (!(isprint(s[i]) || isspace(s[i]))) {
+            throw InvalidMessage();
+        }
+    }
+
     s[n - 2] = '\0';
     char *versionStart = s;
 
@@ -728,6 +744,13 @@ Parser::parseHeader(Header *header)
 
     if (headerHasFields) {
         std::tie(s, n) = peekCharsUntilCRLFCRLF<HeaderTooLarge>(options_.maxHeaderSize);
+
+        for (std::size_t i = 0; i < n - 4; ++i) {
+            if (!(isprint(s[i]) || isspace(s[i]))) {
+                throw InvalidMessage();
+            }
+        }
+
         s[n - 2] = '\0';
         const char *headerFieldsStart = s;
         ParseHeaderFields(headerFieldsStart, header);
@@ -942,16 +965,9 @@ tolower(char c) noexcept
 
 
 bool
-isalpha(char c) noexcept
+isprint(char c) noexcept
 {
-    return CharFlags[static_cast<unsigned char>(c)].alpha;
-}
-
-
-bool
-isalphanum(char c) noexcept
-{
-    return CharFlags[static_cast<unsigned char>(c)].alphanum;
+    return CharFlags[static_cast<unsigned char>(c)].print;
 }
 
 
@@ -1018,27 +1034,23 @@ InitializeCharFlags() noexcept
     if (!charFlagsAreInitialized) {
         std::memset(CharFlags, '\0', sizeof(CharFlags));
 
-        for (char c : ALPHA) {
-            CharFlags[static_cast<unsigned char>(c)].alpha = 1;
-        }
-
-        for (char c : ALPHANUM) {
-            CharFlags[static_cast<unsigned char>(c)].alphanum = 1;
-        }
-
-        for (char c : DIGIT) {
+        for (char c : {DIGIT}) {
             CharFlags[static_cast<unsigned char>(c)].digit = 1;
         }
 
-        for (char c : HEXDIGIT) {
+        for (char c : {HEXDIGIT}) {
             CharFlags[static_cast<unsigned char>(c)].hexdigit = 1;
         }
 
-        for (char c : OCTDIGIT) {
+        for (char c : {OCTDIGIT}) {
             CharFlags[static_cast<unsigned char>(c)].octdigit = 1;
         }
 
-        for (char c : SPACE) {
+        for (char c : {PRINT}) {
+            CharFlags[static_cast<unsigned char>(c)].print = 1;
+        }
+
+        for (char c : {SPACE}) {
             CharFlags[static_cast<unsigned char>(c)].space = 1;
         }
 

@@ -1,4 +1,4 @@
-#include "http/connection.h"
+#include "connection.h"
 
 #include <functional>
 #include <utility>

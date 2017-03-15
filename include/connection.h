@@ -6,8 +6,8 @@
 #include <siren/stream.h>
 #include <siren/tcp_socket.h>
 
-#include "http/dumper.h"
-#include "http/parser.h"
+#include "dumper.h"
+#include "parser.h"
 
 
 namespace siren {
@@ -73,7 +73,7 @@ public:
     inline bool isValid() const noexcept;
     inline bool bodyIsChunked() const noexcept;
     inline std::size_t getRemainingBodyOrChunkSize() const noexcept;
-    inline char *peekData(std::size_t *);
+    inline char *peekData(std::size_t);
     inline void discardData(std::size_t);
 
 protected:
@@ -119,7 +119,7 @@ private:
 
 
 /*
- * #include "http/connection-inl.h"
+ * #include "connection-inl.h"
  */
 
 
@@ -253,7 +253,7 @@ PayloadReader::getRemainingBodyOrChunkSize() const noexcept
 
 
 char *
-PayloadReader::peekData(std::size_t *dataSize)
+PayloadReader::peekData(std::size_t dataSize)
 {
     SIREN_ASSERT(isValid());
     return parser_->peekPayloadData(dataSize);

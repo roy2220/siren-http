@@ -1,8 +1,8 @@
 #pragma once
 
 
-#include "http/header.h"
-#include "http/uri.h"
+#include "header.h"
+#include "uri.h"
 
 
 namespace siren {
