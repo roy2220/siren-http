@@ -65,8 +65,8 @@ namespace siren {
 namespace http {
 
 template <class ...T>
-Dumper::Dumper(T &&...argument)
-  : outputStream_(std::forward<T>(argument)...)
+Dumper::Dumper(T &&...outputStream)
+  : outputStream_(std::forward<T>(outputStream)...)
 {
     initialize();
 }

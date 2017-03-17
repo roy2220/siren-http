@@ -3,7 +3,11 @@
 
 #include <cstddef>
 #include <string>
+#include <tuple>
+#include <type_traits>
 #include <vector>
+
+#include <siren/utility.h>
 
 
 namespace siren {
@@ -51,6 +55,14 @@ private:
 
     inline void initialize() noexcept;
     inline void move(Header *) noexcept;
+
+    template <class T>
+    inline std::enable_if_t<TestInstantiation<std::decay_t<T>, std::tuple>::Result
+                            , std::size_t> addFieldNameOrValue(T &&);
+
+    template <class T>
+    inline std::enable_if_t<!TestInstantiation<std::decay_t<T>, std::tuple>::Result
+                            , std::size_t> addFieldNameOrValue(T &&);
 };
 
 } // namespace http
@@ -68,7 +80,6 @@ private:
 #include <utility>
 
 #include <siren/assert.h>
-#include <siren/utility.h>
 
 
 namespace siren {
@@ -173,24 +184,37 @@ Header::search(const char *fieldName, T &&callback) const
 
 template <class T, class U>
 void
-Header::addField(T &&arguments1, U &&arguments2)
+Header::addField(T &&fieldName, U &&fieldValue)
+{
+    fields_.push_back({addFieldNameOrValue(std::forward<T>(fieldName))
+                       , addFieldNameOrValue(std::forward<U>(fieldValue))});
+    isSorted_ = false;
+}
+
+
+template <class T>
+std::enable_if_t<TestInstantiation<std::decay_t<T>, std::tuple>::Result, std::size_t>
+Header::addFieldNameOrValue(T &&fieldNameOrValue)
 {
     base_.push_back('\0');
-    std::size_t offset1 = base_.size();
+    std::size_t offset = base_.size();
 
-    ApplyFunction([&] (auto &&...argument) {
-        base_.append(std::forward<decltype(argument)>(argument)...);
-    }, std::forward<T>(arguments1));
+    ApplyFunction([&] (auto &&...fieldNameOrValue) {
+        base_.append(std::forward<decltype(fieldNameOrValue)>(fieldNameOrValue)...);
+    }, std::forward<T>(fieldNameOrValue));
 
+    return offset;
+}
+
+
+template <class T>
+std::enable_if_t<!TestInstantiation<std::decay_t<T>, std::tuple>::Result, std::size_t>
+Header::addFieldNameOrValue(T &&fieldNameOrValue)
+{
     base_.push_back('\0');
-    std::size_t offset2 = base_.size();
-
-    ApplyFunction([&] (auto &&...argument) {
-        base_.append(std::forward<decltype(argument)>(argument)...);
-    }, std::forward<U>(arguments2));
-
-    fields_.push_back({offset1, offset2});
-    isSorted_ = false;
+    std::size_t offset = base_.size();
+    base_.append(std::forward<T>(fieldNameOrValue));
+    return offset;
 }
 
 

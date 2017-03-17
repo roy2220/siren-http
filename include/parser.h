@@ -146,9 +146,9 @@ namespace siren {
 namespace http {
 
 template <class ...T>
-Parser::Parser(const Options &options, T &&...argument)
+Parser::Parser(const Options &options, T &&...inputStream)
   : options_(options),
-    inputStream_(std::forward<T>(argument)...)
+    inputStream_(std::forward<T>(inputStream)...)
 {
     initialize();
 }

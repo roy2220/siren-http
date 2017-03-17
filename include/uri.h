@@ -177,66 +177,66 @@ URI::getFragmentID() const noexcept
 
 template <class ...T>
 void
-URI::setSchemeName(T &&...argument)
+URI::setSchemeName(T &&...schemeName)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(argument)...);
+    base_.append(std::forward<T>(schemeName)...);
     schemeNameOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setUserInfo(T &&...argument)
+URI::setUserInfo(T &&...userInfo)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(argument)...);
+    base_.append(std::forward<T>(userInfo)...);
     userInfoOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setHostName(T &&...argument)
+URI::setHostName(T &&...hostName)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(argument)...);
+    base_.append(std::forward<T>(hostName)...);
     hostNameOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setPathName(T &&...argument)
+URI::setPathName(T &&...pathName)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(argument)...);
+    base_.append(std::forward<T>(pathName)...);
     pathNameOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setQueryString(T &&...argument)
+URI::setQueryString(T &&...queryString)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(argument)...);
+    base_.append(std::forward<T>(queryString)...);
     queryStringOffset_ = offset;
 }
 
 
 template <class ...T>
 void
-URI::setFragmentID(T &&...argument)
+URI::setFragmentID(T &&...fragmentID)
 {
     base_.push_back('\0');
     std::size_t offset = base_.size();
-    base_.append(std::forward<T>(argument)...);
+    base_.append(std::forward<T>(fragmentID)...);
     fragmentIDOffset_ = offset;
 }
 

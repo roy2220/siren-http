@@ -105,7 +105,7 @@ SIREN_TEST("Dumper http requests/responses")
     req.uri.setFragmentID("def");
     req.majorVersionNumber = 1;
     req.minorVersionNumber = 1;
-    req.header.addField(std::make_tuple("Host"), std::make_tuple("google.com"));
+    req.header.addField("Host", "google.com");
     d.putRequest(req, 6);
 
     {
@@ -123,7 +123,7 @@ SIREN_TEST("Dumper http requests/responses")
     req.uri.setPathName("/");
     req.majorVersionNumber = 1;
     req.minorVersionNumber = 0;
-    req.header.addField(std::make_tuple("Host"), std::make_tuple("test.com"));
+    req.header.addField("Host", "test.com");
     d.putRequest(req);
 
     {
@@ -144,7 +144,7 @@ SIREN_TEST("Dumper http requests/responses")
     rsp.minorVersionNumber = 1;
     rsp.statusCode = StatusCode::OK;
     rsp.reasonPhrase = "Foo, Bar!";
-    rsp.header.addField(std::make_tuple("Key"), std::make_tuple("Val ue"));
+    rsp.header.addField("Key", "Val ue");
     d.putResponse(rsp, 0);
 }
 
