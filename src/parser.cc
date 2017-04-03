@@ -1029,33 +1029,31 @@ digit2int<16>(char c) noexcept
 void
 InitializeCharFlags() noexcept
 {
-    static bool charFlagsAreInitialized = false;
+    static struct Helper {
+        Helper() {
+            std::memset(CharFlags, '\0', sizeof(CharFlags));
 
-    if (!charFlagsAreInitialized) {
-        std::memset(CharFlags, '\0', sizeof(CharFlags));
+            for (char c : {DIGIT}) {
+                CharFlags[static_cast<unsigned char>(c)].digit = 1;
+            }
 
-        for (char c : {DIGIT}) {
-            CharFlags[static_cast<unsigned char>(c)].digit = 1;
+            for (char c : {HEXDIGIT}) {
+                CharFlags[static_cast<unsigned char>(c)].hexdigit = 1;
+            }
+
+            for (char c : {OCTDIGIT}) {
+                CharFlags[static_cast<unsigned char>(c)].octdigit = 1;
+            }
+
+            for (char c : {PRINT}) {
+                CharFlags[static_cast<unsigned char>(c)].print = 1;
+            }
+
+            for (char c : {SPACE}) {
+                CharFlags[static_cast<unsigned char>(c)].space = 1;
+            }
         }
-
-        for (char c : {HEXDIGIT}) {
-            CharFlags[static_cast<unsigned char>(c)].hexdigit = 1;
-        }
-
-        for (char c : {OCTDIGIT}) {
-            CharFlags[static_cast<unsigned char>(c)].octdigit = 1;
-        }
-
-        for (char c : {PRINT}) {
-            CharFlags[static_cast<unsigned char>(c)].print = 1;
-        }
-
-        for (char c : {SPACE}) {
-            CharFlags[static_cast<unsigned char>(c)].space = 1;
-        }
-
-        charFlagsAreInitialized = true;
-    }
+    } helper;
 }
 
 } // namespace
