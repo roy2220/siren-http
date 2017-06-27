@@ -535,19 +535,17 @@ Parser::peekPayloadData(std::size_t payloadDataSize)
     SIREN_ASSERT(payloadDataSize <= remainingBodyOrChunkSize_);
     char *payloadData;
 
-    if (payloadDataSize < remainingBodyOrChunkSize_) {
-        payloadData = inputStream_.peekData(payloadDataSize);
-    } else {
-        if (bodyIsChunked_) {
-            payloadData = inputStream_.peekData(remainingChunkSize_ + 2);
+    if (payloadDataSize == remainingBodyOrChunkSize_ && bodyIsChunked_) {
+        inputStream_.peekData(remainingChunkSize_ + 2);
+        payloadData = inputStream_.getData();
 
-            if (!(payloadData[remainingChunkSize_] == '\r'
-                  && payloadData[remainingChunkSize_ + 1] == '\n')) {
-                throw InvalidMessage();
-            }
-        } else {
-            payloadData = inputStream_.peekData(remainingBodySize_);
+        if (!(payloadData[remainingChunkSize_] == '\r'
+              && payloadData[remainingChunkSize_ + 1] == '\n')) {
+            throw InvalidMessage();
         }
+    } else {
+        inputStream_.peekData(remainingBodyOrChunkSize_);
+        payloadData = inputStream_.getData();
     }
 
     return payloadData;
@@ -560,22 +558,17 @@ Parser::discardPayloadData(std::size_t payloadDataSize)
     SIREN_ASSERT(isValid());
     SIREN_ASSERT(payloadDataSize <= remainingBodyOrChunkSize_);
 
-    if (payloadDataSize < remainingBodyOrChunkSize_) {
-        inputStream_.discardData(payloadDataSize);
-        remainingBodyOrChunkSize_ -= payloadDataSize;
-    } else {
-        if (bodyIsChunked_) {
-            inputStream_.discardData(remainingChunkSize_ + SIREN_STRLEN("\r\n"));
+    if (payloadDataSize == remainingBodyOrChunkSize_ && bodyIsChunked_) {
+        inputStream_.discardData(remainingChunkSize_ + SIREN_STRLEN("\r\n"));
 
-            if (remainingChunkSize_ == 0) {
-                bodyIsChunked_ = false;
-            } else {
-                remainingChunkSize_ = parseChunkSize();
-            }
+        if (remainingChunkSize_ == 0) {
+            bodyIsChunked_ = false;
         } else {
-            inputStream_.discardData(remainingBodySize_);
-            remainingBodySize_ = 0;
+            remainingChunkSize_ = parseChunkSize();
         }
+    } else {
+        inputStream_.discardData(remainingBodyOrChunkSize_);
+        remainingBodyOrChunkSize_ -= payloadDataSize;
     }
 }
 
@@ -739,7 +732,8 @@ void
 Parser::parseHeader(Header *header)
 {
     std::size_t n = 2;
-    char *s = inputStream_.peekData(n);
+    inputStream_.peekData(n);
+    char *s = inputStream_.getData();
     bool headerHasFields = !(*s == '\r' && s[1] == '\n');
 
     if (headerHasFields) {
@@ -870,7 +864,8 @@ Parser::peekCharsUntilCRLF(std::size_t maxNumberOfChars)
             throw F();
         }
 
-        char *chars = inputStream_.peekData(charCount);
+        inputStream_.peekData(charCount);
+        char *chars = inputStream_.getData();
         int c1 = chars[charCount - 2];
         int c2 = chars[charCount - 1];
 
@@ -902,7 +897,8 @@ Parser::peekCharsUntilCRLFCRLF(std::size_t maxNumberOfChars)
             throw F();
         }
 
-        char *chars = inputStream_.peekData(charCount);
+        inputStream_.peekData(charCount);
+        char *chars = inputStream_.getData();
         int c1 = chars[charCount - 4];
         int c2 = chars[charCount - 3];
         int c3 = chars[charCount - 2];

@@ -22,7 +22,8 @@ public:
     inline explicit InputStream(Stream *, T &&);
 
     inline bool isValid() const noexcept;
-    inline char *peekData(std::size_t);
+    inline void peekData(std::size_t);
+    inline char *getData() noexcept;
     inline void discardData(std::size_t) noexcept;
 
 private:
@@ -103,7 +104,7 @@ InputStream::isValid() const noexcept
 }
 
 
-char *
+void
 InputStream::peekData(std::size_t dataSize)
 {
     SIREN_ASSERT(isValid());
@@ -111,7 +112,13 @@ InputStream::peekData(std::size_t dataSize)
     while (base_->getDataSize() < dataSize) {
         writer_(base_);
     }
+}
 
+
+char *
+InputStream::getData() noexcept
+{
+    SIREN_ASSERT(isValid());
     return static_cast<char *>(base_->getData());
 }
 

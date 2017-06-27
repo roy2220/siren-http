@@ -103,16 +103,21 @@ char *
 Dumper::reservePayloadBuffer(std::size_t payloadBufferSize)
 {
     SIREN_ASSERT(isValid());
+    char *payloadBuffer;
 
     if (bodyIsChunked_) {
         constexpr unsigned int k = (std::numeric_limits<std::size_t>::digits + 3) / 4;
 
-        return outputStream_.reserveBuffer(k + SIREN_STRLEN("\r\n") + payloadBufferSize
-                                           + SIREN_STRLEN("\r\n")) + k + SIREN_STRLEN("\r\n");
+        outputStream_.reserveBuffer(k + SIREN_STRLEN("\r\n") + payloadBufferSize
+                                    + SIREN_STRLEN("\r\n"));
+        payloadBuffer = outputStream_.getBuffer() + k + SIREN_STRLEN("\r\n");
     } else {
         SIREN_ASSERT(payloadBufferSize <= remainingBodySize_);
-        return outputStream_.reserveBuffer(payloadBufferSize);
+        outputStream_.reserveBuffer(payloadBufferSize);
+        payloadBuffer = outputStream_.getBuffer();
     }
+
+    return payloadBuffer;
 }
 
 
@@ -124,8 +129,7 @@ Dumper::flushPayloadBuffer(std::size_t payloadBufferSize)
     if (bodyIsChunked_) {
         constexpr unsigned int k = (std::numeric_limits<std::size_t>::digits + 3) / 4;
 
-        char *s1 = outputStream_.reserveBuffer(k + SIREN_STRLEN("\r\n") + payloadBufferSize
-                                               + SIREN_STRLEN("\r\n"));
+        char *s1 = outputStream_.getBuffer();
         char *s2 = s1;
         s2 += std::sprintf(s2, "%0*zX", k, payloadBufferSize);
         *s2++ = '\r';
@@ -137,7 +141,6 @@ Dumper::flushPayloadBuffer(std::size_t payloadBufferSize)
 
         if (payloadBufferSize == 0) {
             bodyIsChunked_ = false;
-            remainingBodySize_ = 0;
         }
     } else {
         SIREN_ASSERT(payloadBufferSize <= remainingBodySize_);
@@ -158,7 +161,7 @@ Dumper::dumpRequestStartLine(const Request &request)
     const char *queryString = request.uri.getQueryString();
     const char *fragmentID = request.uri.getFragmentID();
 
-    char *s1 = outputStream_.reserveBuffer(
+    outputStream_.reserveBuffer(
         std::strlen(methodName) +
         SIREN_STRLEN(" ") +
         std::strlen(schemeName) +
@@ -181,6 +184,7 @@ Dumper::dumpRequestStartLine(const Request &request)
         SIREN_STRLEN("\r\n")
     );
 
+    char *s1 = outputStream_.getBuffer();
     char *s2 = s1;
     s2 += std::sprintf(s2, "%s ", methodName);
 
@@ -222,7 +226,7 @@ Dumper::dumpRequestStartLine(const Request &request)
 void
 Dumper::dumpResponseStartLine(const Response &response)
 {
-    char *s1 = outputStream_.reserveBuffer(
+    outputStream_.reserveBuffer(
         SIREN_STRLEN("HTTP/") +
         std::numeric_limits<unsigned short>::digits10 +
         SIREN_STRLEN(".") +
@@ -234,6 +238,7 @@ Dumper::dumpResponseStartLine(const Response &response)
         SIREN_STRLEN("\r\n")
     );
 
+    char *s1 = outputStream_.getBuffer();
     char *s2 = s1;
     s2 += std::sprintf(s2, "HTTP/%hu.%hu %d %s", response.majorVersionNumber
                        , response.minorVersionNumber, static_cast<int>(response.statusCode)
@@ -250,11 +255,12 @@ Dumper::dumpHeader(const Header &header, bool bodyIsChunked, std::size_t bodySiz
     std::size_t n = 0;
 
     if (bodyIsChunked) {
-        char *s1 = outputStream_.reserveBuffer(
+        outputStream_.reserveBuffer(
             n +
             SIREN_STRLEN("Transfer-Encoding: chunked\r\n")
-        ) + n;
+        );
 
+        char *s1 = outputStream_.getBuffer() + n;
         char *s2 = s1;
         s2 += std::sprintf(s2, "Transfer-Encoding: chunked");
         *s2++ = '\r';
@@ -264,13 +270,14 @@ Dumper::dumpHeader(const Header &header, bool bodyIsChunked, std::size_t bodySiz
         if (bodySize >= 1) {
             constexpr unsigned int k = (std::numeric_limits<std::size_t>::digits + 2) / 3;
 
-            char *s1 = outputStream_.reserveBuffer(
+            outputStream_.reserveBuffer(
                 n +
                 SIREN_STRLEN("Content-Length: ") +
                 k +
                 SIREN_STRLEN("\r\n")
-            ) + n;
+            );
 
+            char *s1 = outputStream_.getBuffer() + n;
             char *s2 = s1;
             s2 += std::sprintf(s2, "Content-Length: %zo", bodySize);
             *s2++ = '\r';
@@ -281,14 +288,15 @@ Dumper::dumpHeader(const Header &header, bool bodyIsChunked, std::size_t bodySiz
 
     header.traverse([&] (std::size_t, const char *headerFieldName , const char *headerFieldValue)
                     -> void {
-        char *s1 = outputStream_.reserveBuffer(
+        outputStream_.reserveBuffer(
             n +
             std::strlen(headerFieldName) +
             SIREN_STRLEN(": ") +
             std::strlen(headerFieldValue) +
             SIREN_STRLEN("\r\n")
-        ) + n;
+        );
 
+        char *s1 = outputStream_.getBuffer() + n;
         char *s2 = s1;
         s2 += std::sprintf(s2, "%s: %s", headerFieldName, headerFieldValue);
         *s2++ = '\r';
@@ -297,11 +305,12 @@ Dumper::dumpHeader(const Header &header, bool bodyIsChunked, std::size_t bodySiz
     });
 
     {
-        char *s1 = outputStream_.reserveBuffer(
+        outputStream_.reserveBuffer(
             n +
             SIREN_STRLEN("\r\n")
-        ) + n;
+        );
 
+        char *s1 = outputStream_.getBuffer() + n;
         char *s2 = s1;
         *s2++ = '\r';
         *s2++ = '\n';

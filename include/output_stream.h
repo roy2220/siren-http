@@ -22,7 +22,8 @@ public:
     inline explicit OutputStream(Stream *, T &&);
 
     inline bool isValid() const noexcept;
-    inline char *reserveBuffer(std::size_t);
+    inline void reserveBuffer(std::size_t);
+    inline char *getBuffer() noexcept;
     inline void flushBuffer(std::size_t);
 
 private:
@@ -103,11 +104,18 @@ OutputStream::isValid() const noexcept
 }
 
 
-char *
+void
 OutputStream::reserveBuffer(std::size_t bufferSize)
 {
     SIREN_ASSERT(isValid());
     base_->reserveBuffer(bufferSize);
+}
+
+
+char *
+OutputStream::getBuffer() noexcept
+{
+    SIREN_ASSERT(isValid());
     return static_cast<char *>(base_->getBuffer());
 }
 
