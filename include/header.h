@@ -57,11 +57,11 @@ private:
     inline void move(Header *) noexcept;
 
     template <class T>
-    inline std::enable_if_t<TestInstantiation<std::decay_t<T>, std::tuple>::Result
+    inline std::enable_if_t<SIREN_TEST_INSTANTIATION(T, std::tuple)
                             , std::size_t> addFieldNameOrValue(T &&);
 
     template <class T>
-    inline std::enable_if_t<!TestInstantiation<std::decay_t<T>, std::tuple>::Result
+    inline std::enable_if_t<!SIREN_TEST_INSTANTIATION(T, std::tuple)
                             , std::size_t> addFieldNameOrValue(T &&);
 };
 
@@ -193,7 +193,7 @@ Header::addField(T &&fieldName, U &&fieldValue)
 
 
 template <class T>
-std::enable_if_t<TestInstantiation<std::decay_t<T>, std::tuple>::Result, std::size_t>
+std::enable_if_t<SIREN_TEST_INSTANTIATION(T, std::tuple), std::size_t>
 Header::addFieldNameOrValue(T &&fieldNameOrValue)
 {
     base_.push_back('\0');
@@ -208,7 +208,7 @@ Header::addFieldNameOrValue(T &&fieldNameOrValue)
 
 
 template <class T>
-std::enable_if_t<!TestInstantiation<std::decay_t<T>, std::tuple>::Result, std::size_t>
+std::enable_if_t<!SIREN_TEST_INSTANTIATION(T, std::tuple), std::size_t>
 Header::addFieldNameOrValue(T &&fieldNameOrValue)
 {
     base_.push_back('\0');
